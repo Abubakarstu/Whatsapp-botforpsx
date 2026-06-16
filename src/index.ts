@@ -30,6 +30,19 @@ app.get('/qr', (_req, res) => {
   else res.status(404).json({ error: 'No QR code available. Use /request-pairing or wait for connection update.' });
 });
 
+app.post('/reset-auth', (_req, res) => {
+  try {
+    if (fs.existsSync(AUTH_DIR)) fs.rmSync(AUTH_DIR, { recursive: true });
+    qrCode = null;
+    pairingCode = null;
+    connectionStatus = 'reset';
+    res.json({ message: 'Auth cleared. Restarting...' });
+    setTimeout(() => process.exit(0), 500);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.post('/request-pairing', async (req, res) => {
   const { phone } = req.body;
   if (!phone || !/^\d{7,15}$/.test(phone)) return res.status(400).json({ error: 'Valid phone number required (digits with country code)' });
@@ -90,8 +103,8 @@ async function sendMessage(to: string, text: string, res: any) {
   }
 }
 
-// ── Baileys Socket ───────────────────────────────────────────────────────
-async function startBot() {
+// ── WhatsApp Connection ──────────────────────────────────────────────────
+async function connectWA() {
   if (!fs.existsSync(AUTH_DIR)) fs.mkdirSync(AUTH_DIR, { recursive: true });
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
 
@@ -110,9 +123,9 @@ async function startBot() {
     if (connection === 'close') {
       const boom = lastDisconnect?.error;
       const shouldReconnect = !isBoom(boom) || boom?.output?.statusCode !== DisconnectReason.loggedOut;
-      console.log(`[WA] Closed. Reconnect: ${shouldReconnect}`);
+      console.log(`[WA] Closed. Will reconnect: ${shouldReconnect}`);
       qrCode = null;
-      if (shouldReconnect) startBot();
+      if (shouldReconnect) setTimeout(connectWA, 3000);
     } else if (connection === 'open') {
       console.log('[WA] Connected!');
     }
@@ -143,12 +156,12 @@ async function startBot() {
       }
     }
   });
-
-  app.listen(PORT, () => {
-    console.log(`[WA] Server on http://localhost:${PORT}`);
-    console.log(`[WA] Status: /status | QR: /qr | Pairing: /request-pairing`);
-    console.log(`[WA] Connected to .NET at ${PSN_HOST}`);
-  });
 }
 
-startBot().catch(console.error);
+// Start HTTP server (once) then connect WhatsApp
+app.listen(PORT, () => {
+  console.log(`[WA] Server on http://localhost:${PORT}`);
+  console.log(`[WA] Status: /status | QR: /qr | Pairing: /request-pairing`);
+  console.log(`[WA] Connected to .NET at ${PSN_HOST}`);
+});
+connectWA().catch(console.error);
