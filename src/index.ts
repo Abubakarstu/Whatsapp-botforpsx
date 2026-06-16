@@ -18,6 +18,7 @@ function isBoom(err: any): boolean {
 // ── HTTP API ─────────────────────────────────────────────────────────────
 const app = express();
 app.use(express.json());
+app.use((_req, res, next) => { res.header('Access-Control-Allow-Origin', '*'); res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE'); res.header('Access-Control-Allow-Headers', 'Content-Type,Authorization'); if (_req.method === 'OPTIONS') return res.sendStatus(200); next(); });
 
 app.get('/status', (_req, res) => {
   res.json({ status: connectionStatus, connected: connectionStatus === 'open', hasQr: !!qrCode, hasPairingCode: !!pairingCode });
@@ -25,7 +26,8 @@ app.get('/status', (_req, res) => {
 
 app.get('/qr', (_req, res) => {
   if (qrCode) res.type('text/plain').send(qrCode);
-  else res.status(404).json({ error: 'No QR code available' });
+  else if (pairingCode) res.json({ pairingCode });
+  else res.status(404).json({ error: 'No QR code available. Use /request-pairing or wait for connection update.' });
 });
 
 app.post('/request-pairing', async (req, res) => {
@@ -103,7 +105,7 @@ async function startBot() {
 
   sock.ev.on('connection.update', (update: any) => {
     const { connection, lastDisconnect, qr } = update;
-    if (qr) { qrCode = qr; pairingCode = null; console.log('[WA] QR updated'); }
+    if (qr) { qrCode = qr; pairingCode = null; console.log(`[WA] QR updated — scan: https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}`); }
     if (connection) connectionStatus = connection;
     if (connection === 'close') {
       const boom = lastDisconnect?.error;
