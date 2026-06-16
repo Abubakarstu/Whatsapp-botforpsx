@@ -134,13 +134,17 @@ async function connectWA() {
   sock.ev.on('creds.update', saveCreds);
 
   // Forward incoming messages to .NET for command processing
-  sock.ev.on('messages.upsert', async ({ messages }: any) => {
+  sock.ev.on('messages.upsert', async ({ messages, type }: any) => {
+    if (type !== 'notify') return;
     for (const msg of messages) {
-      if (msg.key.fromMe || !msg.message?.conversation) continue;
-      const text = msg.message.conversation;
+      if (msg.key?.fromMe) continue;
+      const text = msg.message?.conversation
+        || msg.message?.extendedTextMessage?.text
+        || msg.message?.imageMessage?.caption
+        || '';
       const from = msg.key.remoteJid;
-      if (!from || !text) continue;
-      console.log(`[WA] From ${from}: ${text}`);
+      if (!from || !text.trim()) { console.log(`[WA] Skipped empty msg from ${from}`); continue; }
+      console.log(`[WA] From ${from}: "${text}" -> forwarding to ${PSN_HOST}/api/psx/whatsapp/command`);
       try {
         const resp = await fetch(`${PSN_HOST}/api/psx/whatsapp/command`, {
           method: 'POST',
@@ -149,7 +153,15 @@ async function connectWA() {
         });
         if (resp.ok) {
           const data: any = await resp.json();
-          if (data.response) await sock!.sendMessage(from, { text: data.response });
+          if (data.response) {
+            await sock!.sendMessage(from, { text: data.response });
+            console.log(`[WA] Replied to ${from}: "${data.response.substring(0,40)}..."`);
+          } else {
+            console.log(`[WA] No response from .NET for: "${text}"`);
+          }
+        } else {
+          const errText = await resp.text();
+          console.log(`[WA] .NET returned ${resp.status}: ${errText}`);
         }
       } catch (e: any) {
         console.error(`[WA] Forward error: ${e.message}`);
