@@ -4,7 +4,7 @@ import * as fs from 'fs';
 
 const PORT = parseInt(process.env.PORT || process.env.WA_BOT_PORT || '3100', 10);
 const AUTH_DIR = process.env.WA_AUTH_DIR || './auth';
-const PSN_HOST = process.env.PSN_HOST || 'http://localhost:5087';
+const PSN_HOST = 'https://testpsx.runasp.net';
 
 let sock: ReturnType<typeof makeWASocket> | null = null;
 let connectionStatus: string = 'connecting';
