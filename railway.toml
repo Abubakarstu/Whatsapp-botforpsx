@@ -1,0 +1,8 @@
+[[volumes]]
+mountPath = "/app/auth"
+
+[healthcheck]
+path = "/health"
+interval = 30
+timeout = 5
+retries = 3
